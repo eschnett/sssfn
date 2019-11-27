@@ -44,16 +44,12 @@ incoming = gsample bcond
 --------------------------------------------------------------------------------
 
 op :: (L.Field a, Ord a, U.Unbox a) => Op a
-op =
-  intr * dalembert * intr
-    + bndu * incomingU * bndu
-    + bndv * incomingV * bndv
-    + orig * originUV * orig
+op = intr * dalembert + bndu * incomingU + bndv * incomingV + orig * originUV
   where
-    intr = 1 - (incomingU + incomingV - originUV)
     bndu = incomingU - originUV
     bndv = incomingV - originUV
     orig = originUV
+    intr = 1 - (bndu + bndv + orig)
 
 rhs :: (Floating a, L.Indexable (L.Vector a) a, L.Numeric a, Ord a) => Grid a
 rhs =
@@ -62,10 +58,10 @@ rhs =
     ^+^ bndv #> incoming
     ^+^ orig #> incoming
   where
-    intr = 1 - (incomingU + incomingV - originUV)
     bndu = incomingU - originUV
     bndv = incomingV - originUV
     orig = originUV
+    intr = 1 - (bndu + bndv + orig)
 
 --------------------------------------------------------------------------------
 
@@ -81,25 +77,47 @@ main :: IO ()
 main =
   do
     putStrLn "Spherically Symmetric Scalar Field in double-Null coordinates"
-    putStrLn $ "u " ++ show (coordU @Double)
-    putStrLn $ "v " ++ show (coordV @Double)
-    putStrLn $ "inc " ++ show (gmap approx (incoming @Double))
-    let res = dalembert #> incoming @Double
+
+    -- putStrLn $ "intr " ++ show (intr :: Op Double)
+    -- putStrLn $ "bndu " ++ show (bndu :: Op Double)
+    -- putStrLn $ "bndv " ++ show (bndv :: Op Double)
+    -- putStrLn $ "orig " ++ show (orig :: Op Double)
+    -- putStrLn $ "dal " ++ show (omap approx (dalembert @Double))
+    -- putStrLn $ "op " ++ show (omap approx (op @Double))
+    -- let inc = incoming @Double
+    -- putStrLn $ "inc " ++ show (gmap approx inc)
+    -- putStrLn $ "rhs " ++ show (gmap approx (rhs @Double))
+    -- let ires = dalembert #> inc
+    -- putStrLn $ "ires " ++ show (gmap approx ires)
+    -- putStrLn $ "|ires| " ++ show (gmaxabs ires)
+    -- let jres = op #> inc ^-^ rhs
+    -- putStrLn $ "jres " ++ show (gmap approx jres)
+    -- putStrLn $ "|jres| " ++ show (gmaxabs jres)
+
+    let sol = solve op (rhs @Double)
+    putStrLn $ "sol " ++ show (gmap approx sol)
+    
+    let res = op #> sol ^-^ rhs
     putStrLn $ "res " ++ show (gmap approx res)
     putStrLn $ "|res| " ++ show (gmaxabs res)
-    -- -- putStrLn $ "dal " ++ show (dalembert @Double)
-    -- -- putStrLn $ "incu " ++ show (incomingU @Double)
-    -- -- putStrLn $ "incv " ++ show (incomingV @Double)
-    -- -- putStrLn $ "orig " ++ show (originUV @Double)
-    -- -- putStrLn $ "op " ++ show (op @Double)
-    -- putStrLn $ "pot " ++ show (potential @Double)
-    -- putStrLn $ "rhs " ++ show (rhs @Double)
-    -- let sol = solve op (rhs @Double)
-    -- putStrLn $ "sol " ++ show sol
-    -- let res = dalembert #> sol
-    -- putStrLn $ "res " ++ show res
-    -- putStrLn $ "|res| " ++ show (gmaxabs res)
+    
+    let err = sol ^-^ incoming
+    putStrLn $ "err " ++ show (gmap approx err)
+    putStrLn $ "|err| " ++ show (gmaxabs err)
+
     putStrLn "Done."
   where
     approx :: RealFrac a => a -> a
     approx x = fromInteger (round (1.0e+4 * x)) / 1.0e+4
+    -- intr = 1 - (incomingU + incomingV - originUV)
+    -- bndu = incomingU - originUV
+    -- bndv = incomingV - originUV
+    -- orig = originUV
+
+--------------------------------------------------------------------------------
+
+-- quantum measurements: the quantum system measures the state of the
+-- classical system
+
+-- Beatrice Bonga: conserved current from varying boundary term from
+-- lagrangian <https://arxiv.org/abs/1911.04514>
