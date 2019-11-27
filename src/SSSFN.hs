@@ -20,6 +20,7 @@ module SSSFN
     gzipWith,
     gfoldMap,
     gcount,
+    gmaxabs,
     gsum,
 
     -- * Operators are functors etc.
@@ -32,13 +33,14 @@ module SSSFN
 
     -- * Operators
     (#>),
+    transpose,
     inv,
 
     -- * Coordinates
-    gcoordU,
-    gcoordV,
+    coordU,
+    coordV,
 
-    -- * Sampling function
+    -- * Sampling functions
     gsample,
 
     -- * Evaluating functions
@@ -48,10 +50,22 @@ module SSSFN
     derivU,
     derivV,
     laplace,
+    bndU,
+    bndV,
+    metric,
+
+    -- * Systems of equations
+    solve,
+
+    -- * MaxAbs
+    maxabs,
+    getMaxAbs,
   )
 where
 
+import Data.Maybe
 import Data.Poly hiding (scale)
+import Data.Semigroup hiding ((<>))
 import qualified Data.Vector.Unboxed as U
 import Data.VectorSpace
 import Foreign
@@ -69,7 +83,7 @@ default (Int)
 
 -- | Grid size
 np :: Int
-np = 3
+np = 9
 
 --------------------------------------------------------------------------------
 
@@ -148,6 +162,9 @@ gfoldMap f (Grid x) = foldVector (\a b -> f a P.<> b) mempty x
 gcount :: Container Vector a => Grid a -> Int
 gcount (Grid x) = size x
 
+gmaxabs :: (Container Vector a, Num a, Ord a) => Grid a -> a
+gmaxabs = getMaxAbs . gfoldMap maxabs
+
 gsum :: (Container Vector a) => Grid a -> a
 gsum (Grid x) = sumElements x
 
@@ -198,7 +215,7 @@ instance (Container Vector a, Num a) => VectorSpace (Grid a) where
 
 --------------------------------------------------------------------------------
 
--- | Operators are an additive group
+-- | Operators form an additive group
 instance (Container Vector a, Num a) => AdditiveGroup (Op a) where
 
   zeroV = opure 0
@@ -207,14 +224,14 @@ instance (Container Vector a, Num a) => AdditiveGroup (Op a) where
 
   negateV = omap negate
 
--- | Operators are a vector space
+-- | Operators form a vector space
 instance (Container Vector a, Num a) => VectorSpace (Op a) where
 
   type Scalar (Op a) = a
 
   (*^) a = omap (a *)
 
--- | Operators are a ring
+-- | Operators form a ring
 instance (Container Vector a, Num a, Numeric a) => Num (Op a) where
 
   (+) = (^+^)
@@ -231,19 +248,25 @@ instance (Container Vector a, Num a, Numeric a) => Num (Op a) where
 
   fromInteger i = fromInteger i *^ ounit
 
+-- | Matrix-vector multiplication
 infixr 8 #>
 
 (#>) :: Numeric a => Op a -> Grid a -> Grid a
 Op x #> Grid y = Grid (x L.#> y)
 
+-- | Matrix transpose
+transpose :: Transposable (Matrix a) (Matrix a) => Op a -> Op a
+transpose (Op x) = Op (tr x)
+
+-- | Matrix inverse
 inv :: Field a => Op a -> Op a
 inv (Op x) = Op (L.inv x)
 
 --------------------------------------------------------------------------------
 
 -- | Coordinate of a grid point
-gcoord :: Fractional a => Int -> a
-gcoord i =
+coord :: Fractional a => Int -> a
+coord i =
   let imin = 0
       imax = np - 1
       umin = -1
@@ -252,8 +275,8 @@ gcoord i =
         + fromIntegral (i - imin) / fromIntegral (imax - imin) * umax
 
 -- | Coordinates of all grid points
-gcoords :: (Fractional a, Storable a) => Vector a
-gcoords = fromList [gcoord i | i <- [0 .. np -1]]
+coords :: (Fractional a, Storable a) => Vector a
+coords = fromList [coord i | i <- [0 .. np -1]]
 
 poly2vector :: (Num a, Storable a, U.Unbox a) => UPoly a -> Vector a
 poly2vector p =
@@ -270,7 +293,7 @@ gevalcoeffs u = fromList [eval (mon i) u | i <- [0 .. np -1]]
 
 -- | Evalute a polynomial at all grid points
 gvandermonde :: (Element a, Eq a, Fractional a, U.Unbox a) => Matrix a
-gvandermonde = fromRows [gevalcoeffs u | u <- toList gcoords]
+gvandermonde = fromRows [gevalcoeffs u | u <- toList coords]
 
 --------------------------------------------------------------------------------
 
@@ -280,16 +303,16 @@ mkGrid fx fy =
   Grid $ fromList [fx i * fy j | i <- [0 .. np -1], j <- [0 .. np -1]]
 
 -- | Coordinates of all grid points
-gcoordU ::
+coordU ::
   (Container Vector a, Fractional a, Indexable (Vector a) a) =>
   Grid a
-gcoordU = mkGrid (gcoords L.!) (const 1)
+coordU = mkGrid (coords L.!) (const 1)
 
 -- | Coordinates of all grid points
-gcoordV ::
+coordV ::
   (Container Vector a, Fractional a, Indexable (Vector a) a) =>
   Grid a
-gcoordV = mkGrid (const 1) (gcoords L.!)
+coordV = mkGrid (const 1) (coords L.!)
 
 --------------------------------------------------------------------------------
 
@@ -298,7 +321,7 @@ gsample ::
   (Container Vector a, Fractional a, Indexable (Vector a) a) =>
   ((a, a) -> a) ->
   Grid a
-gsample f = gzipWith (\u v -> f (u, v)) gcoordU gcoordV
+gsample f = gzipWith (\u v -> f (u, v)) coordU coordV
 
 --------------------------------------------------------------------------------
 
@@ -313,8 +336,8 @@ geval g (u, v) =
       vcoeffs = gevalcoeffs v
    in sum
         [ (ucoeffs L.! i) * (vcoeffs L.! j) * (g ! (i, j))
-          | j <- [0 .. np -1],
-            i <- [0 .. np -1]
+          | i <- [0 .. np - 1],
+            j <- [0 .. np - 1]
         ]
 
 --------------------------------------------------------------------------------
@@ -333,6 +356,26 @@ derivs = gvandermonde <> derivs1 <> L.inv gvandermonde
 -- derivs2 :: (Eq a, Field a, U.Unbox a) => Matrix a
 -- derivs2 = derivs <> derivs
 
+bnd :: (Element a, Fractional a) => Matrix a
+bnd =
+  diag $
+    fromList
+      [ if i == 0
+          then -1 / fromIntegral (np - 1)
+          else if i == np - 1 then 1 / fromIntegral (np - 1) else 0
+        | i <- [0 .. np - 1]
+      ]
+
+weights :: (Element a, Fractional a) => Matrix a
+weights =
+  diag $
+    fromList
+      [ if i == 0 || i == np - 1
+          then 1 / fromIntegral (np - 1)
+          else 2 / fromIntegral (np - 1)
+        | i <- [0 .. np - 1]
+      ]
+
 --------------------------------------------------------------------------------
 
 mkOp :: (Element a, Num a) => ((Int, Int) -> a) -> ((Int, Int) -> a) -> Op a
@@ -340,11 +383,11 @@ mkOp fx fy =
   Op $
     fromLists
       [ [ fx (ir, ic) * fy (jr, jc)
-          | jr <- [0 .. np -1],
-            ir <- [0 .. np -1]
+          | ic <- [0 .. np - 1],
+            jc <- [0 .. np - 1]
         ]
-        | jc <- [0 .. np -1],
-          ic <- [0 .. np -1]
+        | ir <- [0 .. np - 1],
+          jr <- [0 .. np - 1]
       ]
 
 -- | Derivatives of a grid
@@ -360,3 +403,40 @@ derivV = mkOp delta (derivs `atIndex`)
 
 laplace :: (Eq a, Field a, U.Unbox a) => Op a
 laplace = (derivU * derivU) + (derivV * derivV)
+
+-- | Boundary locations
+bndU :: (Container Vector a, Fractional a) => Op a
+bndU = mkOp (bnd `atIndex`) delta
+  where
+    delta (i, j) = if i == j then 1 else 0
+
+bndV :: (Container Vector a, Fractional a) => Op a
+bndV = mkOp delta (bnd `atIndex`)
+  where
+    delta (i, j) = if i == j then 1 else 0
+
+metric :: (Container Vector a, Fractional a) => Op a
+metric = mkOp (weights `atIndex`) (weights `atIndex`)
+
+--------------------------------------------------------------------------------
+
+solve :: Field a => Op a -> Grid a -> Grid a
+solve (Op a) (Grid x) =
+  Grid $ head $ toColumns $ fromJust $ linearSolve a (asColumn x)
+
+--------------------------------------------------------------------------------
+
+newtype MaxAbs a = MaxAbsInternal a
+  deriving (Eq, Ord, Read, Show)
+
+maxabs :: Num a => a -> MaxAbs a
+maxabs x = MaxAbsInternal (abs x)
+
+getMaxAbs :: MaxAbs a -> a
+getMaxAbs (MaxAbsInternal x) = x
+
+instance Ord a => Semigroup (MaxAbs a) where
+  MaxAbsInternal x <> MaxAbsInternal y = MaxAbsInternal $ max x y
+
+instance (Num a, Ord a) => Monoid (MaxAbs a) where
+  mempty = MaxAbsInternal 0

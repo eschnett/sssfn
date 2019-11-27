@@ -172,6 +172,9 @@ executables:
     main: Main.hs
     dependencies:
       - base
+      - hmatrix
+      - vector
+      - vector-space
       - sssfn
     ghc-options:
       - -rtsopts
