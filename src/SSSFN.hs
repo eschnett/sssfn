@@ -9,10 +9,12 @@ module SSSFN
     Grid (..),
     gunit,
     (!),
+    gcoerce,
 
     -- * Operators
     Op (..),
     ounit,
+    ocoerce,
 
     -- * Grids are functors etc.
     gmap,
@@ -29,6 +31,7 @@ module SSSFN
     ozipWith,
     ofoldMap,
     ocount,
+    omaxabs,
     osum,
 
     -- * Operators
@@ -47,9 +50,12 @@ module SSSFN
     geval,
 
     -- * Derivatives
+    delta,
     derivU,
     derivV,
-    laplace,
+    derivUU,
+    derivUV,
+    derivVV,
     bndU,
     bndV,
     metric,
@@ -63,6 +69,7 @@ module SSSFN
   )
 where
 
+import Control.Exception (assert)
 import Data.Maybe
 import Data.Poly hiding (scale)
 import Data.Semigroup hiding ((<>))
@@ -83,7 +90,7 @@ default (Int)
 
 -- | Grid size
 np :: Int
-np = 9
+np = 5
 
 --------------------------------------------------------------------------------
 
@@ -97,7 +104,7 @@ instance (QC.Arbitrary a, Storable a) => QC.Arbitrary (Grid a) where
 
   shrink = map (Grid . fromList) . traverse QC.shrink . toList . getGrid
 
-instance Storable a => GHC.IsList (Grid a) where
+instance (Storable a) => GHC.IsList (Grid a) where
 
   type Item (Grid a) = a
 
@@ -105,13 +112,22 @@ instance Storable a => GHC.IsList (Grid a) where
 
   toList = toList . getGrid
 
-(!) :: Indexable (Vector a) a => Grid a -> (Int, Int) -> a
-(!) (Grid x) (i, j) = x L.! (i + np * j)
+(!) :: (Container Vector a) => Grid a -> (Int, Int) -> a
+(!) (Grid x) (i, j) = x `atIndex` (i * np + j)
 
 gunit :: (Num a, Storable a) => (Int, Int) -> Grid a
 gunit (i, j) =
   let ij = i * np + j
    in Grid $ fromList [if k == ij then 1 else 0 | k <- [0 .. np ^ 2 -1]]
+
+gcoerce :: forall a b. (Storable a, Storable b) => Grid a -> Grid b
+gcoerce (Grid xss) =
+  assert (na * sa `mod` sb == 0) $
+    (Grid $ fromByteString $ toByteString xss)
+  where
+    na = cols (asRow xss)
+    sa = sizeOf @a undefined
+    sb = sizeOf @b undefined
 
 --------------------------------------------------------------------------------
 
@@ -139,14 +155,26 @@ instance Element a => GHC.IsList (Op a) where
 ounit :: (Element a, Num a) => Op a
 ounit = Op $ ident (np ^ 2)
 
+ocoerce :: forall a b. (Container Vector a, Num a, Storable b) => Op a -> Op b
+ocoerce (Op x) =
+  assert (ma * sa `mod` sb == 0 && na * sa `mod` sb == 0) $
+    (Op $ reshape nb $ getGrid $ gcoerce $ Grid $ flatten x)
+  where
+    (ma, na) = size x
+    sa = sizeOf @a undefined
+    sb = sizeOf @b undefined
+    nb = na * sa `div` sb
+
 --------------------------------------------------------------------------------
 
 -- | Grids are functors etc.
-gmap :: (Container Vector a, Element b) => (a -> b) -> Grid a -> Grid b
-gmap f (Grid x) = Grid (cmap f x)
+-- gmap :: (Container Vector a, Element b) => (a -> b) -> Grid a -> Grid b
+-- gmap f (Grid x) = Grid (cmap f x)
+gmap :: (Storable a, Storable b) => (a -> b) -> Grid a -> Grid b
+gmap f (Grid x) = Grid (mapVectorWithIndex (\i a -> f a) x)
 
 gpure :: Container Vector a => a -> Grid a
-gpure a = Grid (konst a (np ^ 2))
+gpure a = Grid $ konst a (np ^ 2)
 
 gzipWith ::
   (Storable a, Storable b, Storable c) =>
@@ -171,8 +199,12 @@ gsum (Grid x) = sumElements x
 --------------------------------------------------------------------------------
 
 -- | Operators are functors etc.
-omap :: (Container Vector a, Num a, Element b) => (a -> b) -> Op a -> Op b
-omap f (Op x) = Op (cmap f x)
+-- omap :: (Container Vector a, Num a, Element b) => (a -> b) -> Op a -> Op b
+-- omap f (Op x) = Op (cmap f x)
+omap :: (L.Element a, Storable b) => (a -> b) -> Op a -> Op b
+omap f (Op x) = Op $ reshape n $ getGrid $ gmap f $ Grid $ flatten x
+  where
+    n = cols x
 
 opure :: (Container Vector a, Num a) => a -> Op a
 opure a = Op (konst a (np ^ 2, np ^ 2))
@@ -192,13 +224,19 @@ ofoldMap f (Op x) = foldVector (\a b -> f a P.<> b) mempty (flatten x)
 ocount :: (Container Vector a, Num a) => Op a -> Int
 ocount (Op x) = let (ni, nj) = size x in ni * nj
 
+omaxabs :: (Container Vector a, Num a, Ord a) => Op a -> a
+omaxabs = getMaxAbs . ofoldMap maxabs
+
 osum :: (Container Vector a, Num a) => Op a -> a
 osum (Op x) = sumElements x
 
 --------------------------------------------------------------------------------
 
 -- | Grids are an additive group
-instance (Container Vector a, Num a) => AdditiveGroup (Grid a) where
+instance
+  (Container Vector a, Num a) =>
+  AdditiveGroup (Grid a)
+  where
 
   zeroV = gpure 0
 
@@ -207,7 +245,10 @@ instance (Container Vector a, Num a) => AdditiveGroup (Grid a) where
   negateV = gmap negate
 
 -- | Grids are a vector space
-instance (Container Vector a, Num a) => VectorSpace (Grid a) where
+instance
+  (Container Vector a, Num a) =>
+  VectorSpace (Grid a)
+  where
 
   type Scalar (Grid a) = a
 
@@ -303,39 +344,43 @@ mkGrid fx fy =
   Grid $ fromList [fx i * fy j | i <- [0 .. np -1], j <- [0 .. np -1]]
 
 -- | Coordinates of all grid points
-coordU ::
-  (Container Vector a, Fractional a, Indexable (Vector a) a) =>
-  Grid a
-coordU = mkGrid (coords L.!) (const 1)
+coordU :: (Container Vector a, Fractional a) => Grid a
+coordU = mkGrid (coords `atIndex`) (const 1)
 
 -- | Coordinates of all grid points
-coordV ::
-  (Container Vector a, Fractional a, Indexable (Vector a) a) =>
-  Grid a
-coordV = mkGrid (const 1) (coords L.!)
+coordV :: (Container Vector a, Fractional a) => Grid a
+coordV = mkGrid (const 1) (coords `atIndex`)
 
 --------------------------------------------------------------------------------
 
 -- | Sample a function at grid points
 gsample ::
-  (Container Vector a, Fractional a, Indexable (Vector a) a) =>
-  ((a, a) -> a) ->
-  Grid a
-gsample f = gzipWith (\u v -> f (u, v)) coordU coordV
+  (Container Vector a, Fractional a, Storable b) =>
+  ((a, a) -> b) ->
+  Grid b
+gsample f = gzipWith (curry f) (coordU) (coordV)
 
 --------------------------------------------------------------------------------
 
 -- | Evaluate a grid at a point
+-- f / Identity
 geval ::
-  (Eq a, Indexable (Vector a) a, Num a, Storable a, U.Unbox a) =>
-  Grid a ->
+  ( Container Vector a,
+    Eq a,
+    Num a,
+    U.Unbox a,
+    Container Vector b,
+    VectorSpace b,
+    Scalar b ~ a
+  ) =>
+  Grid b ->
   (a, a) ->
-  a
+  b
 geval g (u, v) =
   let ucoeffs = gevalcoeffs u
       vcoeffs = gevalcoeffs v
-   in sum
-        [ (ucoeffs L.! i) * (vcoeffs L.! j) * (g ! (i, j))
+   in sumV
+        [ ((ucoeffs `atIndex` i) * (vcoeffs `atIndex` j)) *^ (g ! (i, j))
           | i <- [0 .. np - 1],
             j <- [0 .. np - 1]
         ]
@@ -390,30 +435,41 @@ mkOp fx fy =
           jr <- [0 .. np - 1]
       ]
 
+delta :: Field a => Op a
+delta = mkOp delta1 delta1
+  where
+    delta1 (i, j) = if i == j then 1 else 0
+
 -- | Derivatives of a grid
 derivU :: (Eq a, Field a, U.Unbox a) => Op a
-derivU = mkOp (derivs `atIndex`) delta
+derivU = mkOp (derivs `atIndex`) delta1
   where
-    delta (i, j) = if i == j then 1 else 0
+    delta1 (i, j) = if i == j then 1 else 0
 
 derivV :: (Eq a, Field a, U.Unbox a) => Op a
-derivV = mkOp delta (derivs `atIndex`)
+derivV = mkOp delta1 (derivs `atIndex`)
   where
-    delta (i, j) = if i == j then 1 else 0
+    delta1 (i, j) = if i == j then 1 else 0
 
-laplace :: (Eq a, Field a, U.Unbox a) => Op a
-laplace = (derivU * derivU) + (derivV * derivV)
+derivUU :: (Eq a, Field a, U.Unbox a) => Op a
+derivUU = derivU * derivU
+
+derivUV :: (Eq a, Field a, U.Unbox a) => Op a
+derivUV = derivU * derivV
+
+derivVV :: (Eq a, Field a, U.Unbox a) => Op a
+derivVV = derivV * derivV
 
 -- | Boundary locations
 bndU :: (Container Vector a, Fractional a) => Op a
-bndU = mkOp (bnd `atIndex`) delta
+bndU = mkOp (bnd `atIndex`) delta1
   where
-    delta (i, j) = if i == j then 1 else 0
+    delta1 (i, j) = if i == j then 1 else 0
 
 bndV :: (Container Vector a, Fractional a) => Op a
-bndV = mkOp delta (bnd `atIndex`)
+bndV = mkOp delta1 (bnd `atIndex`)
   where
-    delta (i, j) = if i == j then 1 else 0
+    delta1 (i, j) = if i == j then 1 else 0
 
 metric :: (Container Vector a, Fractional a) => Op a
 metric = mkOp (weights `atIndex`) (weights `atIndex`)

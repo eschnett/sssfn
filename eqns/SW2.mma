@@ -1,0 +1,7 @@
+-((u[] - v[])*(((u[] - v[])^2*Derivative[0, 1][q][u[], v[]] - Derivative[0, 1][\[Gamma]][u[], v[]])*
+      Derivative[1, 0][w][u[], v[]] + Derivative[0, 1][w][u[], v[]]*
+      ((u[] - v[])^2*Derivative[1, 0][q][u[], v[]] - Derivative[1, 0][\[Gamma]][u[], v[]])) + 
+   2*q[u[], v[]]*(u[] - v[])^2*(2*Derivative[0, 1][w][u[], v[]] - 2*Derivative[1, 0][w][u[], v[]] + 
+     (u[] - v[])*Derivative[1, 1][w][u[], v[]]) - 2*\[Gamma][u[], v[]]*(Derivative[0, 1][w][u[], v[]] - 
+     Derivative[1, 0][w][u[], v[]] + (u[] - v[])*Derivative[1, 1][w][u[], v[]]))/
+ (2*(u[] - v[])*(q[u[], v[]]*(u[] - v[])^2 - \[Gamma][u[], v[]])*(q[u[], v[]]*(u[] - v[])^2 + \[Gamma][u[], v[]]))

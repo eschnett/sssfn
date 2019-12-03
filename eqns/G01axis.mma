@@ -1,0 +1,2 @@
+(-14*q[u[], v[]] + (u[] - v[])^2*Derivative[1, 1][q][u[], v[]] - Derivative[1, 1][\[Gamma]][u[], v[]])/
+ (q[u[], v[]]*(u[] - v[])^2 - \[Gamma][u[], v[]])

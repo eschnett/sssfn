@@ -1,0 +1,15 @@
+-(4*q[u[], v[]]^3*(u[] - v[])^4*(-2 + (u[] - v[])^2*Derivative[0, 1][w][u[], v[]]^2) - 
+   q[u[], v[]]*(4*\[Gamma][u[], v[]]^2*(5 + (u[] - v[])^2*Derivative[0, 1][w][u[], v[]]^2) + 
+     12*(u[] - v[])*\[Gamma][u[], v[]]*((u[] - v[])^2*Derivative[0, 1][q][u[], v[]] + 
+       Derivative[0, 1][\[Gamma]][u[], v[]]) + (u[] - v[])^2*(3*(u[] - v[])^4*Derivative[0, 1][q][u[], v[]]^2 - 
+       2*(u[] - v[])^2*Derivative[0, 1][q][u[], v[]]*Derivative[0, 1][\[Gamma]][u[], v[]] - 
+       Derivative[0, 1][\[Gamma]][u[], v[]]^2)) + 2*q[u[], v[]]^2*(u[] - v[])^2*
+    (-2*\[Gamma][u[], v[]]*(-5 + (u[] - v[])^2*Derivative[0, 1][w][u[], v[]]^2) + 
+     (u[] - v[])*(2*(u[] - v[])^2*Derivative[0, 1][q][u[], v[]] + 2*Derivative[0, 1][\[Gamma]][u[], v[]] + 
+       (u[] - v[])*((u[] - v[])^2*Derivative[0, 2][q][u[], v[]] - Derivative[0, 2][\[Gamma]][u[], v[]]))) + 
+   \[Gamma][u[], v[]]*((u[] - v[])^4*Derivative[0, 1][q][u[], v[]]^2 + 
+     4*\[Gamma][u[], v[]]^2*Derivative[0, 1][w][u[], v[]]^2 + 2*(u[] - v[])^2*Derivative[0, 1][q][u[], v[]]*
+      Derivative[0, 1][\[Gamma]][u[], v[]] - 3*Derivative[0, 1][\[Gamma]][u[], v[]]^2 - 
+     2*\[Gamma][u[], v[]]*(-8*(u[] - v[])*Derivative[0, 1][q][u[], v[]] + 
+       (u[] - v[])^2*Derivative[0, 2][q][u[], v[]] - Derivative[0, 2][\[Gamma]][u[], v[]])))/
+ (2*(-(q[u[], v[]]*(u[] - v[])^2) + \[Gamma][u[], v[]])^2*(q[u[], v[]]*(u[] - v[])^2 + \[Gamma][u[], v[]]))

@@ -1,0 +1,1 @@
+-((u - v)*(((u - v)^2*qv - gv)*       wu + wv*       ((u - v)^2*qu - gu)) +     2*q*(u - v)^2*(2*wv - 2*wu +       (u - v)*wuv) - 2*g*(wv -       wu + (u - v)*wuv))/  (2*(u - v)*(q*(u - v)^2 - g)*(q*(u - v)^2 + g))

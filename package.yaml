@@ -161,7 +161,6 @@ library:
     - base
     - hmatrix
     - poly
-    # - quickcheck-instances
     - vector
     - vector-space
   source-dirs: src
@@ -172,9 +171,9 @@ executables:
     main: Main.hs
     dependencies:
       - base
-      - hmatrix
-      - vector
-      - vector-space
+      # - hmatrix
+      # - vector
+      # - vector-space
       - sssfn
     ghc-options:
       - -rtsopts
@@ -202,7 +201,6 @@ tests:
       - QuickCheck
       - base
       - hmatrix
-      # - quickcheck-instances
       - tasty
       - tasty-discover
       - tasty-hspec
