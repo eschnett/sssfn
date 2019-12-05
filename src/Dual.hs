@@ -15,8 +15,8 @@ import qualified Test.QuickCheck as QC
 
 default (Int)
 
-data Dual a = Dual {primal :: a, dual :: a}
-  deriving (Read, Show, Generic, Foldable, Functor, Traversable)
+data Dual a = Dual {primal :: !a, dual :: !a}
+  deriving (Read, Show, Generic, Foldable, Traversable)
 
 instance (Bounded a, Num a) => Bounded (Dual a) where
 
@@ -45,25 +45,37 @@ instance Storable a => Storable (Dual a) where
     pokeElemOff (castPtr ptr) 0 x
     pokeElemOff (castPtr ptr) 1 dx
 
+instance Functor Dual where
+
+  {-# INLINE fmap #-}
+  fmap f !(Dual x dx) = Dual (f x) (f dx)
+
 instance Applicative Dual where
 
-  pure x = Dual x x
+  {-# INLINE pure #-}
+  pure !x = Dual x x
 
-  liftA2 f (Dual x dx) (Dual y dy) = Dual (f x y) (f dx dy)
+  {-# INLINE liftA2 #-}
+  liftA2 f !(Dual x dx) !(Dual y dy) = Dual (f x y) (f dx dy)
 
 instance Num a => Num (Dual a) where
 
-  (+) = liftA2 (+)
+  {-# INLINE (+) #-}
+  -- (+) = liftA2 (+)
+  (+) !(Dual x dx) !(Dual y dy) = Dual (x + y) (dx + dy)
 
-  negate = fmap negate
+  {-# INLINE negate #-}
+  -- negate = fmap negate
+  negate !(Dual x dx) = Dual (negate x) (negate dx)
 
-  Dual x dx * Dual y dy = Dual (x * y) (x * dy + dx * y)
+  {-# INLINE (*) #-}
+  (*) !(Dual x dx) !(Dual y dy) = Dual (x * y) (x * dy + dx * y)
 
-  -- signum = fmap signum
-  signum (Dual x dx) = Dual (signum x) 0
+  {-# INLINE signum #-}
+  signum !(Dual x dx) = Dual (signum x) 0
 
-  -- abs = fmap abs
-  abs (Dual x dx) = Dual (abs x) (dx * signum x)
+  {-# INLINE abs #-}
+  abs !(Dual x dx) = Dual (abs x) (dx * signum x)
 
   fromInteger i = Dual (fromInteger i) 0
 

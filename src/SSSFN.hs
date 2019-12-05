@@ -50,6 +50,8 @@ module SSSFN
     geval,
 
     -- * Derivatives
+    vandermonde,
+    expfilter,
     delta,
     derivU,
     derivV,
@@ -62,6 +64,7 @@ module SSSFN
 
     -- * Systems of equations
     solve,
+    solveLS,
 
     -- * MaxAbs
     maxabs,
@@ -90,7 +93,7 @@ default (Int)
 
 -- | Grid size
 np :: Int
-np = 5
+np = 33
 
 --------------------------------------------------------------------------------
 
@@ -306,17 +309,19 @@ inv (Op x) = Op (L.inv x)
 --------------------------------------------------------------------------------
 
 -- | Coordinate of a grid point
-coord :: Fractional a => Int -> a
+coord :: Floating a => Int -> a
 coord i =
   let imin = 0
       imax = np - 1
       umin = -1
       umax = 1
-   in fromIntegral (i - imax) / fromIntegral (imin - imax) * umin
-        + fromIntegral (i - imin) / fromIntegral (imax - imin) * umax
+      u =
+        fromIntegral (i - imax) / fromIntegral (imin - imax) * umin
+          + fromIntegral (i - imin) / fromIntegral (imax - imin) * umax
+   in sin (pi / 2 * u)
 
 -- | Coordinates of all grid points
-coords :: (Fractional a, Storable a) => Vector a
+coords :: (Floating a, Storable a) => Vector a
 coords = fromList [coord i | i <- [0 .. np -1]]
 
 poly2vector :: (Num a, Storable a, U.Unbox a) => UPoly a -> Vector a
@@ -332,8 +337,8 @@ gevalcoeffs u = fromList [eval (mon i) u | i <- [0 .. np -1]]
     mon :: (Eq a, Num a, U.Unbox a) => Int -> UPoly a
     mon i = monomial (fromIntegral i) 1
 
--- | Evalute a polynomial at all grid points
-gvandermonde :: (Element a, Eq a, Fractional a, U.Unbox a) => Matrix a
+-- | Evaluate a polynomial at all grid points
+gvandermonde :: (Element a, Eq a, Floating a, U.Unbox a) => Matrix a
 gvandermonde = fromRows [gevalcoeffs u | u <- toList coords]
 
 --------------------------------------------------------------------------------
@@ -344,18 +349,18 @@ mkGrid fx fy =
   Grid $ fromList [fx i * fy j | i <- [0 .. np -1], j <- [0 .. np -1]]
 
 -- | Coordinates of all grid points
-coordU :: (Container Vector a, Fractional a) => Grid a
+coordU :: (Container Vector a, Floating a) => Grid a
 coordU = mkGrid (coords `atIndex`) (const 1)
 
 -- | Coordinates of all grid points
-coordV :: (Container Vector a, Fractional a) => Grid a
+coordV :: (Container Vector a, Floating a) => Grid a
 coordV = mkGrid (const 1) (coords `atIndex`)
 
 --------------------------------------------------------------------------------
 
 -- | Sample a function at grid points
 gsample ::
-  (Container Vector a, Fractional a, Storable b) =>
+  (Container Vector a, Floating a, Storable b) =>
   ((a, a) -> b) ->
   Grid b
 gsample f = gzipWith (curry f) (coordU) (coordV)
@@ -401,6 +406,20 @@ derivs = gvandermonde <> derivs1 <> L.inv gvandermonde
 -- derivs2 :: (Eq a, Field a, U.Unbox a) => Matrix a
 -- derivs2 = derivs <> derivs
 
+expfilter1 :: (Container Vector a, RealFloat a) => Matrix a
+expfilter1 =
+  diag $
+    fromList
+      [ let n0 = np `div` 2
+         in if i <= n0
+              then 1
+              else peps ** (fromIntegral (i - n0) / fromIntegral (np - n0))
+        | i <- [0 .. np -1]
+      ]
+
+expfilters :: (Container Vector a, Field a, RealFloat a, U.Unbox a) => Matrix a
+expfilters = gvandermonde <> expfilter1 <> L.inv gvandermonde
+
 bnd :: (Element a, Fractional a) => Matrix a
 bnd =
   diag $
@@ -434,6 +453,12 @@ mkOp fx fy =
         | ir <- [0 .. np - 1],
           jr <- [0 .. np - 1]
       ]
+
+vandermonde :: (Container Vector a, Eq a, Floating a, U.Unbox a) => Op a
+vandermonde = mkOp (gvandermonde `atIndex`) (gvandermonde `atIndex`)
+
+expfilter :: (Container Vector a, Field a, RealFloat a, U.Unbox a) => Op a
+expfilter = mkOp (expfilters `atIndex`) (expfilters `atIndex`)
 
 delta :: Field a => Op a
 delta = mkOp delta1 delta1
@@ -479,6 +504,10 @@ metric = mkOp (weights `atIndex`) (weights `atIndex`)
 solve :: Field a => Op a -> Grid a -> Grid a
 solve (Op a) (Grid x) =
   Grid $ head $ toColumns $ fromJust $ linearSolve a (asColumn x)
+
+solveLS :: Field a => Op a -> Grid a -> Grid a
+solveLS (Op a) (Grid x) =
+  Grid $ head $ toColumns $ linearSolveLS a (asColumn x)
 
 --------------------------------------------------------------------------------
 

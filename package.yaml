@@ -160,6 +160,7 @@ library:
     - QuickCheck
     - base
     - hmatrix
+    - monad-loops
     - poly
     - vector
     - vector-space

@@ -31,7 +31,7 @@ incomingV = omap isneg (bndV @a)
 originUV :: forall a. (L.Container L.Vector a, Fractional a, Ord a) => Op a
 originUV = ozipWith (*) incomingU incomingV
 
-potential :: forall a. (L.Container L.Vector a, Fractional a) => Grid a
+potential :: forall a. (L.Container L.Vector a, Floating a) => Grid a
 potential = gzipWith (\u v -> 0) (coordU @a) (coordV @a)
 
 incoming :: forall a. (L.Container L.Vector a, Floating a) => Grid a
