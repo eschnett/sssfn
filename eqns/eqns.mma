@@ -1,0 +1,43 @@
+eqnG01 =
+-2*r2[q[u[], v[]]] + 2*r2[\[Gamma][u[], v[]]] - 2*r1dr[q][u[], v[]] + 
+ Derivative[1, 1][q][u[], v[]]
+
+eqnG22 =
+2*q[u[], v[]]*\[Gamma][u[], v[]]^2*
+  r1dr[q][u[], v[]] + \[Gamma][u[], v[]]^2*
+  Derivative[0, 1][q][u[], v[]]*
+     Derivative[1, 0][q][u[], v[]] - 
+ 4*q[u[], v[]]^2*\[Gamma][u[], v[]]^2*
+     Derivative[0, 1][w][u[], v[]]*Derivative[1, 0][w][u[], v[]] + 
+   2*q[u[], v[]]^2*Derivative[0, 1][\[Gamma]][u[], v[]]*
+  Derivative[1, 0][\[Gamma]][u[], v[]] - 
+   2*q[u[], v[]]*\[Gamma][u[], v[]]^2*
+  Derivative[1, 1][q][u[], v[]] - 
+   2*q[u[], v[]]^2*\[Gamma][u[], v[]]*
+  Derivative[1, 1][\[Gamma]][u[], v[]]
+
+eqnSW2 =
+4*q[u[], v[]]*r1dr[w][u[], v[]] - 2*Derivative[0, 1][w][u[], v[]]*
+     Derivative[1, 0][q][u[], v[]] - 2*Derivative[0, 1][q][u[], v[]]*
+     Derivative[1, 0][w][u[], v[]] - 
+ 4*q[u[], v[]]*Derivative[1, 1][w][u[], v[]]
+
+eqnG00 =
+-4*q[u[], v[]]*r1du[\[Gamma]]*z[q] + 
+ 4*q[u[], v[]]*r1du[q]*z[\[Gamma]] + 
+   \[Gamma][u[], v[]]*Derivative[1, 0][q][u[], v[]]^2 - 
+ 4*q[u[], v[]]^2*\[Gamma][u[], v[]]*
+     Derivative[1, 0][w][u[], v[]]^2 + 
+ 2*q[u[], v[]]*Derivative[1, 0][q][u[], v[]]*
+     Derivative[1, 0][\[Gamma]][u[], v[]] - 
+ 2*q[u[], v[]]*\[Gamma][u[], v[]]*Derivative[2, 0][q][u[], v[]]
+
+eqnG11 =
+4*q[u[], v[]]*r1dv[\[Gamma]]*z[q] - 
+ 4*q[u[], v[]]*r1dv[q]*z[\[Gamma]] + 
+   \[Gamma][u[], v[]]*Derivative[0, 1][q][u[], v[]]^2 - 
+ 4*q[u[], v[]]^2*\[Gamma][u[], v[]]*
+     Derivative[0, 1][w][u[], v[]]^2 + 
+ 2*q[u[], v[]]*Derivative[0, 1][q][u[], v[]]*
+     Derivative[0, 1][\[Gamma]][u[], v[]] - 
+ 2*q[u[], v[]]*\[Gamma][u[], v[]]*Derivative[0, 2][q][u[], v[]]

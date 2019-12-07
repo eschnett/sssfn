@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# OPTIONS_GHC -fno-warn-type-defaults #-}
 
 -- Ideas taken from <http://sriku.org/blog/2019/03/12/automatic-differentiation-dual-numbers--taylor-numbers/>
@@ -46,7 +47,6 @@ instance Storable a => Storable (Dual a) where
     pokeElemOff (castPtr ptr) 1 dx
 
 instance Functor Dual where
-
   {-# INLINE fmap #-}
   fmap f !(Dual x dx) = Dual (f x) (f dx)
 

@@ -40,24 +40,41 @@ module SSSFN
     inv,
 
     -- * Coordinates
+    isOrigin,
     coordU,
     coordV,
+    coordT,
+    coordR,
+    coordR1, -- remove?
 
     -- * Sampling functions
     gsample,
 
     -- * Evaluating functions
     geval,
+    gevalCoeffs,
 
     -- * Derivatives
     vandermonde,
     expfilter,
     delta,
+    symmetrizeU,
+    symmetrizeV,
+    symmetrizeR,
     derivU,
     derivV,
     derivUU,
     derivUV,
     derivVV,
+    derivT,
+    derivR,
+    derivTT,
+    derivRR,
+    r1derivR,
+    r1derivU,
+    r1derivV,
+    r2project,
+    zproject,
     bndU,
     bndV,
     metric,
@@ -93,7 +110,7 @@ default (Int)
 
 -- | Grid size
 np :: Int
-np = 33
+np = 5
 
 --------------------------------------------------------------------------------
 
@@ -331,15 +348,15 @@ poly2vector p =
    in fromList [if i < n then v U.! i else 0 | i <- [0 .. np -1]]
 
 -- | Evalute a polynomial at a grid point
-gevalcoeffs :: (Eq a, Num a, Storable a, U.Unbox a) => a -> Vector a
-gevalcoeffs u = fromList [eval (mon i) u | i <- [0 .. np -1]]
+evalcoeffs :: (Eq a, Num a, Storable a, U.Unbox a) => a -> Vector a
+evalcoeffs u = fromList [eval (mon i) u | i <- [0 .. np -1]]
   where
     mon :: (Eq a, Num a, U.Unbox a) => Int -> UPoly a
     mon i = monomial (fromIntegral i) 1
 
 -- | Evaluate a polynomial at all grid points
 gvandermonde :: (Element a, Eq a, Floating a, U.Unbox a) => Matrix a
-gvandermonde = fromRows [gevalcoeffs u | u <- toList coords]
+gvandermonde = fromRows [evalcoeffs u | u <- toList coords]
 
 --------------------------------------------------------------------------------
 
@@ -348,6 +365,15 @@ mkGrid :: (Num a, Storable a) => (Int -> a) -> (Int -> a) -> Grid a
 mkGrid fx fy =
   Grid $ fromList [fx i * fy j | i <- [0 .. np -1], j <- [0 .. np -1]]
 
+isOrigin :: Grid Bool
+isOrigin =
+  Grid $
+    fromList
+      [ i == j
+        | i <- [0 .. np -1],
+          j <- [0 .. np -1]
+      ]
+
 -- | Coordinates of all grid points
 coordU :: (Container Vector a, Floating a) => Grid a
 coordU = mkGrid (coords `atIndex`) (const 1)
@@ -355,6 +381,16 @@ coordU = mkGrid (coords `atIndex`) (const 1)
 -- | Coordinates of all grid points
 coordV :: (Container Vector a, Floating a) => Grid a
 coordV = mkGrid (const 1) (coords `atIndex`)
+
+-- | Combined coordinates
+coordT :: (Container Vector a, Floating a) => Grid a
+coordT = coordV ^+^ coordU
+
+coordR :: (Container Vector a, Floating a) => Grid a
+coordR = coordV ^-^ coordU
+
+coordR1 :: (Container Vector a, RealFloat a) => Grid a
+coordR1 = gzipWith (\isOrig r -> if isOrig then 0 else recip r) isOrigin coordR
 
 --------------------------------------------------------------------------------
 
@@ -372,7 +408,7 @@ gsample f = gzipWith (curry f) (coordU) (coordV)
 geval ::
   ( Container Vector a,
     Eq a,
-    Num a,
+    Field a,
     U.Unbox a,
     Container Vector b,
     VectorSpace b,
@@ -382,13 +418,31 @@ geval ::
   (a, a) ->
   b
 geval g (u, v) =
-  let ucoeffs = gevalcoeffs u
-      vcoeffs = gevalcoeffs v
+  let ucoeffs = tr (L.inv gvandermonde) L.#> evalcoeffs u
+      vcoeffs = tr (L.inv gvandermonde) L.#> evalcoeffs v
    in sumV
         [ ((ucoeffs `atIndex` i) * (vcoeffs `atIndex` j)) *^ (g ! (i, j))
           | i <- [0 .. np - 1],
             j <- [0 .. np - 1]
         ]
+
+gevalCoeffs ::
+  ( Container Vector a,
+    Eq a,
+    Field a,
+    U.Unbox a
+  ) =>
+  (a, a) ->
+  Grid a
+gevalCoeffs (u, v) =
+  let ucoeffs = tr (L.inv gvandermonde) L.#> evalcoeffs u
+      vcoeffs = tr (L.inv gvandermonde) L.#> evalcoeffs v
+   in Grid $
+        fromList
+          [ (ucoeffs `atIndex` i) * (vcoeffs `atIndex` j)
+            | i <- [0 .. np - 1],
+              j <- [0 .. np - 1]
+          ]
 
 --------------------------------------------------------------------------------
 
@@ -465,6 +519,68 @@ delta = mkOp delta1 delta1
   where
     delta1 (i, j) = if i == j then 1 else 0
 
+diagonal :: (Element a, Num a) => Grid a -> Op a
+diagonal (Grid xs) = Op $ diag xs
+
+originR :: Field a => Op a
+originR =
+  Op $
+    fromLists
+      [ [ if ic == ir && jc == jr && ic == jc then 1 else 0
+          | ic <- [0 .. np - 1],
+            jc <- [0 .. np - 1]
+        ]
+        | ir <- [0 .. np - 1],
+          jr <- [0 .. np - 1]
+      ]
+
+valueAtOriginR :: (Eq a, Field a, U.Unbox a) => Op a
+valueAtOriginR =
+  Op $
+    fromRows
+      [ let t = coordT ! (ir, jr)
+            r = 0
+            v = (t + r) / 2
+            u = (t - r) / 2
+         in getGrid (gevalCoeffs (u, v))
+        | ir <- [0 .. np - 1],
+          jr <- [0 .. np - 1]
+      ]
+
+reverseU :: (Element a, Num a) => Op a
+reverseU = mkOp reverse1 delta1
+  where
+    reverse1 (i, j) = if i == np-1-j then 1 else 0
+    delta1 (i, j) = if i == j then 1 else 0
+
+reverseV :: (Element a, Num a) => Op a
+reverseV = mkOp delta1 reverse1
+  where
+    reverse1 (i, j) = if i == np-1-j then 1 else 0
+    delta1 (i, j) = if i == j then 1 else 0
+
+-- change (t,r) -> (t,-r); (u,v) -> (v,u)
+reverseR :: (Element a, Num a) => Op a
+reverseR =
+  Op $
+    fromLists
+      [ [ if ic == jr && jc == ir then 1 else 0
+          | ic <- [0 .. np - 1],
+            jc <- [0 .. np - 1]
+        ]
+        | ir <- [0 .. np - 1],
+          jr <- [0 .. np - 1]
+      ]
+
+symmetrizeU :: Field a => Op a
+symmetrizeU = (1 / 2) *^ (delta ^+^ reverseU)
+
+symmetrizeV :: Field a => Op a
+symmetrizeV = (1 / 2) *^ (delta ^+^ reverseV)
+
+symmetrizeR :: Field a => Op a
+symmetrizeR = (1 / 2) *^ (delta ^+^ reverseR)
+
 -- | Derivatives of a grid
 derivU :: (Eq a, Field a, U.Unbox a) => Op a
 derivU = mkOp (derivs `atIndex`) delta1
@@ -484,6 +600,57 @@ derivUV = derivU * derivV
 
 derivVV :: (Eq a, Field a, U.Unbox a) => Op a
 derivVV = derivV * derivV
+
+-- | Combined derivatives
+-- > t = v + u
+-- > r = v - u
+-- > t^2 = v^2 + 2 v u + u^2
+-- > r^2 = v^2 - 2 v u + u^2
+derivT :: (Eq a, Field a, U.Unbox a) => Op a
+derivT = (derivV ^+^ derivU) ^/ 2
+
+derivR :: (Eq a, Field a, U.Unbox a) => Op a
+derivR = (derivV ^-^ derivU) ^/ 2
+
+derivTT :: (Eq a, Field a, U.Unbox a) => Op a
+derivTT = derivT * derivT
+
+derivRR :: (Eq a, Field a, U.Unbox a) => Op a
+derivRR = derivR * derivR
+
+-- | 1/r dr
+r1derivR :: (Field a, RealFloat a, U.Unbox a) => Op a
+r1derivR =
+  ((delta - originR) * diagonal coordR1 * derivR + originR * derivRR)
+    * symmetrizeR
+
+-- t = v + u   v = (t + r) / 2
+-- r = v - u   u = (t - r) / 2
+
+-- | 1/r du
+r1derivU :: (Field a, RealFloat a, U.Unbox a) => Op a
+r1derivU =
+  ((delta - originR) * diagonal coordR1 * derivU - originR * derivUU)
+    * symmetrizeR
+
+-- | 1/r dv
+r1derivV :: (Field a, RealFloat a, U.Unbox a) => Op a
+r1derivV =
+  ((delta - originR) * diagonal coordR1 * derivV + originR * derivVV)
+    * symmetrizeR
+
+-- | 1/r^2
+r2project :: (Field a, RealFloat a, U.Unbox a) => Op a
+r2project =
+  ( (delta - originR) * diagonal (gmap (^ 2) coordR1)
+      + originR * ((1 / 2) *^ derivRR)
+  )
+    * (delta - valueAtOriginR)
+    * symmetrizeR
+
+-- | zero at origin
+zproject :: (Eq a, Field a, U.Unbox a) => Op a
+zproject = (delta - valueAtOriginR) * symmetrizeR
 
 -- | Boundary locations
 bndU :: (Container Vector a, Fractional a) => Op a

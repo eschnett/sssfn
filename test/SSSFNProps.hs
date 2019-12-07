@@ -1,6 +1,6 @@
 {-# LANGUAGE TypeApplications #-}
 
-module SSSFNLaws where
+module SSSFNProps where
 
 import Data.VectorSpace
 import qualified GHC.Exts as GHC
@@ -130,25 +130,3 @@ prop_Op_scale_comm a b x = a *^ (b *^ x) ~~~ b *^ (a *^ x)
 
 prop_Op_scale_add_dist :: Double -> Double -> Op Double -> Property
 prop_Op_scale_add_dist a b x = (a + b) *^ x ~~~ (a *^ x) + (b *^ x)
-
---------------------------------------------------------------------------------
-
--- prop_deriv_coord :: Property
--- prop_deriv_coord =
---   derivs L.#> coords @Double ~~~ cmap (const 1) (coords @Double)
-
-prop_derivU_coordU :: Property
-prop_derivU_coordU = derivU #> coordU @Double ~~~ gpure 1
-
-prop_derivU_coordV :: Property
-prop_derivU_coordV = derivU #> coordV @Double ~~~ gpure 0
-
-prop_derivV_coordU :: Property
-prop_derivV_coordU = derivV #> coordU @Double ~~~ gpure 0
-
-prop_derivV_coordV :: Property
-prop_derivV_coordV = derivV #> coordV @Double ~~~ gpure 1
--- -- W D + (W D)^T = W B
--- prop_derivU_bndU :: Property
--- prop_derivU_bndU =
---   metric * derivU + transpose (metric * derivU) ~~~ metric * bndU @Double
