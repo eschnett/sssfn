@@ -110,7 +110,7 @@ default (Int)
 
 -- | Grid size
 np :: Int
-np = 5
+np = 33
 
 --------------------------------------------------------------------------------
 
@@ -550,13 +550,13 @@ valueAtOriginR =
 reverseU :: (Element a, Num a) => Op a
 reverseU = mkOp reverse1 delta1
   where
-    reverse1 (i, j) = if i == np-1-j then 1 else 0
+    reverse1 (i, j) = if i == np -1 - j then 1 else 0
     delta1 (i, j) = if i == j then 1 else 0
 
 reverseV :: (Element a, Num a) => Op a
 reverseV = mkOp delta1 reverse1
   where
-    reverse1 (i, j) = if i == np-1-j then 1 else 0
+    reverse1 (i, j) = if i == np -1 - j then 1 else 0
     delta1 (i, j) = if i == j then 1 else 0
 
 -- change (t,r) -> (t,-r); (u,v) -> (v,u)

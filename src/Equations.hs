@@ -137,12 +137,14 @@ eqnSW2 !s@(State g q w) !r2s@(State r2g r2q _) !r1sr@(State r1gr r1qr r1wr) !su@
 
 -- Constraints
 
-eqnG00 :: Num a => State a -> State a -> State a -> State a -> State a -> a
+eqnG00 :: Num a => Coord a -> State a -> State a -> State a -> State a -> State a -> a
 {-# INLINE eqnG00 #-}
-eqnG00 !s@(State g q w) !zs@(State zg zq _) !r1su@(State r1gu r1qu r1wu) !su@(State gu qu wu) !suu@(State guu quu wuu) =
-  -4 * q * r1gu * zq + 4 * q * r1qu * zg + g * qu ^ 2 - 4 * q ^ 2 * g * wu ^ 2 + 2 * q * qu * gu - 2 * q * g * quu
+eqnG00 !c@(Coord u v) !s@(State g q w) !r2s@(State r2g r2q r2w) !r1su@(State r1gu r1qu r1wu) !su@(State gu qu wu) !suu@(State guu quu wuu) =
+  let r = v - u
+   in 4 * q ^ 2 * r1qu - 4 * q ^ 2 * r1gu + 4 * q * r1qu * g - 4 * q * r1gu * g - 4 * r * q * r2q * qu + 4 * r * q * r2g * qu + g * qu ^ 2 - 4 * q ^ 2 * g * wu ^ 2 - 4 * r * q * r2q * gu + 4 * r * q * r2g * gu + 2 * q * qu * gu - 2 * q * g * quu
 
-eqnG11 :: Num a => State a -> State a -> State a -> State a -> State a -> a
+eqnG11 :: Num a => Coord a -> State a -> State a -> State a -> State a -> State a -> a
 {-# INLINE eqnG11 #-}
-eqnG11 !s@(State g q w) !zs@(State zg zq _) !r1sv@(State r1gv r1qv r1wv) !sv@(State gv qv wv) !svv@(State gvv qvv wvv) =
-  4 * q * r1gv * zq - 4 * q * r1qv * zg + g * qv ^ 2 - 4 * q ^ 2 * g * wv ^ 2 + 2 * q * qv * gv - 2 * q * g * qvv
+eqnG11 !c@(Coord u v) !s@(State g q w) !r2s@(State r2g r2q r2w) !r1sv@(State r1gv r1qv r1wv) !sv@(State gv qv wv) !svv@(State gvv qvv wvv) =
+  let r = v - u
+   in -4 * q ^ 2 * r1qv + 4 * q ^ 2 * r1gv - 4 * q * r1qv * g + 4 * q * r1gv * g + 4 * r * q * r2q * qv - 4 * r * q * r2g * qv + g * qv ^ 2 - 4 * q ^ 2 * g * wv ^ 2 + 4 * r * q * r2q * gv - 4 * r * q * r2g * gv + 2 * q * qv * gv - 2 * q * g * qvv
